@@ -8,7 +8,7 @@ Wraps httpx.AsyncClient with:
 import os
 import httpx
 
-from gobox_auth import get_access_token
+from .auth import get_access_token
 
 
 def _base_url() -> str:

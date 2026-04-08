@@ -1,5 +1,5 @@
 """Shop integration tools (Shopee, Lazada, TikTok Shop, Tiki)."""
-from gobox_client import api
+from ..client import api
 
 
 def register(mcp) -> None:

@@ -3,7 +3,7 @@
 Wraps /open/api/orders/* endpoints.
 Order identifier in Gobox is `transactionNo` (not numeric ID).
 """
-from gobox_client import api
+from ..client import api
 
 
 def register(mcp) -> None:

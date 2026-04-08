@@ -2,17 +2,16 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install deps first for layer caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy project metadata + source
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
 
-# Copy source
-COPY gobox_auth.py gobox_client.py gobox_mcp.py ./
-COPY tools/ ./tools/
+# Install package (installs deps + console script `gobox-mcp`)
+RUN pip install --no-cache-dir .
 
 EXPOSE 8000
 
 ENV MCP_TRANSPORT=sse
 ENV PORT=8000
 
-CMD ["python", "gobox_mcp.py"]
+CMD ["gobox-mcp"]

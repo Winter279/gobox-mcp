@@ -4,7 +4,7 @@ Provides cities/districts/wards lookup for address validation,
 plus /sys/helpers which returns enum/status code reference data
 used across other endpoints.
 """
-from gobox_client import api
+from ..client import api
 
 
 def register(mcp) -> None:

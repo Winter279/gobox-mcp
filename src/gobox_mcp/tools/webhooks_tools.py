@@ -1,5 +1,5 @@
 """Webhook subscription management tools."""
-from gobox_client import api
+from ..client import api
 
 
 def register(mcp) -> None:

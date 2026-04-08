@@ -11,7 +11,7 @@ Composite tool `sku_full_status` aggregates all 5 in one AI-friendly call.
 """
 import asyncio
 
-from gobox_client import api
+from ..client import api
 
 
 def register(mcp) -> None:

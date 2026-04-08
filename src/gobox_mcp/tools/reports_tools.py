@@ -2,7 +2,7 @@
 
 All reports accept optional date range + warehouse filter.
 """
-from gobox_client import api
+from ..client import api
 
 
 def _date_params(
