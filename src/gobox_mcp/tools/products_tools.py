@@ -12,7 +12,7 @@
    - Individual quantity tools only when you need just one specific state
 
 3. PRODUCT MANAGEMENT:
-   - Create: first call `list_categories` + `list_brands` to get valid IDs
+   - Create: first call `list_categories` → get category_id → then `list_brands(category_id)` + `list_attributes(category_id)`
    - Update: call `get_product(sku)` first to see current state
    - Delete: confirm with user before calling
 
@@ -153,6 +153,7 @@ def register(mcp) -> None:
 
         Use when you need a complete list, e.g. 'show all products of brand X'.
         ALWAYS use q/category/brand filters to narrow results when possible.
+
         """
         params: dict = {"limit": 50, "page": 1, "sort": "id:-1"}
         if q:
@@ -187,18 +188,37 @@ def register(mcp) -> None:
 
     @mcp.tool()
     async def list_categories() -> dict:
-        """List all product categories. Use to get category_id for product creation."""
+        """List all product categories. Use to get category_id for product creation.
+
+        WORKFLOW: Call this FIRST, then use category_id for list_brands and list_attributes.
+        """
         return await api("GET", "/open/api/categories")
 
     @mcp.tool()
-    async def list_brands() -> dict:
-        """List all brands. Use to get brand_id for product creation/filtering."""
-        return await api("GET", "/open/api/brands")
+    async def list_brands(category_id: int) -> dict:
+        """List brands for a category. category_id is REQUIRED.
+
+        WORKFLOW: Call list_categories first to get category_id.
+
+        Args:
+            category_id: Category ID (from list_categories) — required
+        """
+        return await api(
+            "GET", "/open/api/brands", params={"category_id": category_id}
+        )
 
     @mcp.tool()
-    async def list_attributes() -> dict:
-        """List product attributes (color, size, etc.). Use for product creation."""
-        return await api("GET", "/open/api/attributes")
+    async def list_attributes(category_id: int) -> dict:
+        """List product attributes for a category. category_id is REQUIRED.
+
+        WORKFLOW: Call list_categories first to get category_id.
+
+        Args:
+            category_id: Category ID (from list_categories) — required
+        """
+        return await api(
+            "GET", "/open/api/attributes", params={"category_id": category_id}
+        )
 
     @mcp.tool()
     async def list_product_skus(

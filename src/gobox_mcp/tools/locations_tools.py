@@ -14,16 +14,30 @@ def register(mcp) -> None:
         return await api("GET", "/open/api/cities")
 
     @mcp.tool()
-    async def list_districts(city_id: str | None = None) -> dict:
-        """List districts, optionally filtered by city_id."""
-        params = {"city_id": city_id} if city_id else {}
-        return await api("GET", "/open/api/districts", params=params)
+    async def list_districts(city_id: int) -> dict:
+        """List districts for a city. city_id is REQUIRED.
+
+        WORKFLOW: Call list_cities first to get city_id.
+
+        Args:
+            city_id: City/province ID (required, from list_cities)
+        """
+        return await api(
+            "GET", "/open/api/districts", params={"city_id": city_id}
+        )
 
     @mcp.tool()
-    async def list_wards(district_id: str | None = None) -> dict:
-        """List wards, optionally filtered by district_id."""
-        params = {"district_id": district_id} if district_id else {}
-        return await api("GET", "/open/api/wards", params=params)
+    async def list_wards(district_id: int) -> dict:
+        """List wards for a district. district_id is REQUIRED.
+
+        WORKFLOW: Call list_cities → list_districts(city_id) → list_wards(district_id).
+
+        Args:
+            district_id: District ID (required, from list_districts)
+        """
+        return await api(
+            "GET", "/open/api/wards", params={"district_id": district_id}
+        )
 
     @mcp.tool()
     async def list_countries() -> dict:
