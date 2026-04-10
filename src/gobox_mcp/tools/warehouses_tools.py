@@ -21,7 +21,33 @@
    - Export stock: create order → send to gobox → picking created → exported
    - Transfer: warehouse picking type=4 between warehouses
 """
+import asyncio
+
 from ..client import api
+
+
+async def _fetch_all_pages(endpoint: str, params: dict) -> dict:
+    """Fetch all pages in parallel for any paginated endpoint."""
+    first = await api("GET", endpoint, params={**params, "page": 1})
+    meta = first.get("meta", {})
+    total_pages = meta.get("total_page", 1)
+    all_data = first.get("data", [])
+
+    if total_pages > 1:
+        tasks = [
+            api("GET", endpoint, params={**params, "page": p})
+            for p in range(2, total_pages + 1)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for res in results:
+            if isinstance(res, dict) and "data" in res:
+                all_data.extend(res["data"])
+
+    return {
+        "total_found": meta.get("total", len(all_data)),
+        "pages_fetched": total_pages,
+        "data": all_data,
+    }
 
 
 def register(mcp) -> None:
@@ -177,3 +203,69 @@ def register(mcp) -> None:
         return await api(
             "GET", "/open/api/warehouse-pickings", params=params
         )
+
+    @mcp.tool()
+    async def search_all_warehouses(
+        include: str | None = None,
+    ) -> dict:
+        """Fetch ALL warehouses across all pages in parallel."""
+        params: dict = {"limit": 50, "sort": "id:-1"}
+        if include:
+            params["include[]"] = include.split(",")
+        return await _fetch_all_pages("/open/api/warehouses", params)
+
+    @mcp.tool()
+    async def search_all_inventories(
+        warehouse_id: str | None = None,
+        status: int | None = None,
+        done_status: int | None = None,
+        include: str | None = None,
+        start_create_date: str | None = None,
+        end_create_date: str | None = None,
+    ) -> dict:
+        """Fetch ALL inventory checks across all pages in parallel.
+
+        ALWAYS use filters to narrow results.
+        """
+        params: dict = {"limit": 50, "sort": "id:-1"}
+        if warehouse_id:
+            params["warehouse_id"] = warehouse_id
+        if status is not None:
+            params["status"] = status
+        if done_status is not None:
+            params["done_status"] = done_status
+        if include:
+            params["include[]"] = include.split(",")
+        if start_create_date:
+            params["start_create_date"] = start_create_date
+        if end_create_date:
+            params["end_create_date"] = end_create_date
+        return await _fetch_all_pages("/open/api/inventories", params)
+
+    @mcp.tool()
+    async def search_all_warehouse_pickings(
+        warehouse_id: str | None = None,
+        type: int | None = None,
+        status: str | None = None,
+        include: str | None = None,
+        start_create_date: str | None = None,
+        end_create_date: str | None = None,
+    ) -> dict:
+        """Fetch ALL warehouse pickings across all pages in parallel.
+
+        ALWAYS use filters to narrow results.
+        """
+        params: dict = {"limit": 50, "sort": "id:-1"}
+        if warehouse_id:
+            params["warehouse_id"] = warehouse_id
+        if type is not None:
+            params["type"] = type
+        if status:
+            params["status"] = status
+        if include:
+            params["include[]"] = include.split(",")
+        if start_create_date:
+            params["start_create_date"] = start_create_date
+        if end_create_date:
+            params["end_create_date"] = end_create_date
+        return await _fetch_all_pages("/open/api/warehouse-pickings", params)
