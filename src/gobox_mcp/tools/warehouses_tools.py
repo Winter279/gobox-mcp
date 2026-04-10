@@ -29,8 +29,8 @@ from ..client import api
 async def _fetch_all_pages(endpoint: str, params: dict) -> dict:
     """Fetch all pages in parallel for any paginated endpoint."""
     first = await api("GET", endpoint, params={**params, "page": 1})
-    meta = first.get("meta", {})
-    total_pages = meta.get("total_page", 1)
+    pag = first.get("meta", {}).get("pagination", {})
+    total_pages = pag.get("total_pages", 1)
     all_data = first.get("data", [])
 
     if total_pages > 1:
@@ -44,7 +44,7 @@ async def _fetch_all_pages(endpoint: str, params: dict) -> dict:
                 all_data.extend(res["data"])
 
     return {
-        "total_found": meta.get("total", len(all_data)),
+        "total_found": pag.get("total", len(all_data)),
         "pages_fetched": total_pages,
         "data": all_data,
     }

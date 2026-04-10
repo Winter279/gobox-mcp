@@ -58,7 +58,7 @@ def register(mcp) -> None:
         IMPORTANT for AI:
         - ALWAYS use 'q' to search by name/SKU first instead of browsing all pages.
         - Use 'include' to get relations: skus,variants,images,attributes,brand,shops,combos
-        - Response 'meta' has total, total_page, current for pagination.
+        - Response 'meta.pagination' has total, total_pages, current_page for pagination.
         - Platform codes: 1=shopee, 2=lazada, 3=tiktokshop, 4=tiki, 5=pancake, 6=pos
 
         Args:
@@ -166,8 +166,8 @@ def register(mcp) -> None:
             params["include[]"] = include.split(",")
 
         first = await api("GET", "/open/api/products", params=params)
-        meta = first.get("meta", {})
-        total_pages = meta.get("total_page", 1)
+        pag = first.get("meta", {}).get("pagination", {})
+        total_pages = pag.get("total_pages", 1)
         all_data = first.get("data", [])
 
         if total_pages > 1:
@@ -181,7 +181,7 @@ def register(mcp) -> None:
                     all_data.extend(res["data"])
 
         return {
-            "total_found": meta.get("total", len(all_data)),
+            "total_found": pag.get("total", len(all_data)),
             "pages_fetched": total_pages,
             "data": all_data,
         }
@@ -248,8 +248,8 @@ def register(mcp) -> None:
             params["q"] = q
 
         first = await api("GET", "/open/api/product-skus", params=params)
-        meta = first.get("meta", {})
-        total_pages = meta.get("total_page", 1)
+        pag = first.get("meta", {}).get("pagination", {})
+        total_pages = pag.get("total_pages", 1)
         all_data = first.get("data", [])
 
         if total_pages > 1:
@@ -263,7 +263,7 @@ def register(mcp) -> None:
                     all_data.extend(res["data"])
 
         return {
-            "total_found": meta.get("total", len(all_data)),
+            "total_found": pag.get("total", len(all_data)),
             "pages_fetched": total_pages,
             "data": all_data,
         }

@@ -52,7 +52,7 @@ def register(mcp) -> None:
         IMPORTANT for AI:
         - Use 'q' to search by order code, transaction number, or tracking number.
         - Use date range filters to narrow results.
-        - Response 'meta' has total, total_page, current for pagination.
+        - Response 'meta.pagination' has total, total_pages, current_page for pagination.
 
         Args:
             q: Search by order code, transaction number, or tracking number
@@ -177,8 +177,8 @@ def register(mcp) -> None:
             params["end_create_date"] = end_create_date
 
         first = await api("GET", "/open/api/orders", params=params)
-        meta = first.get("meta", {})
-        total_pages = meta.get("total_page", 1)
+        pag = first.get("meta", {}).get("pagination", {})
+        total_pages = pag.get("total_pages", 1)
         all_data = first.get("data", [])
 
         if total_pages > 1:
@@ -192,7 +192,7 @@ def register(mcp) -> None:
                     all_data.extend(res["data"])
 
         return {
-            "total_found": meta.get("total", len(all_data)),
+            "total_found": pag.get("total", len(all_data)),
             "pages_fetched": total_pages,
             "data": all_data,
         }

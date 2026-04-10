@@ -36,8 +36,8 @@ def register(mcp) -> None:
         """Fetch ALL shops across all pages in parallel."""
         params: dict = {"limit": 50, "page": 1, "sort": "id:-1"}
         first = await api("GET", "/open/api/shops", params=params)
-        meta = first.get("meta", {})
-        total_pages = meta.get("total_page", 1)
+        pag = first.get("meta", {}).get("pagination", {})
+        total_pages = pag.get("total_pages", 1)
         all_data = first.get("data", [])
 
         if total_pages > 1:
@@ -51,7 +51,7 @@ def register(mcp) -> None:
                     all_data.extend(res["data"])
 
         return {
-            "total_found": meta.get("total", len(all_data)),
+            "total_found": pag.get("total", len(all_data)),
             "pages_fetched": total_pages,
             "data": all_data,
         }
