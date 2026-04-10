@@ -3,6 +3,8 @@
 Wraps /open/api/orders/* endpoints.
 Order identifier in Gobox is `transactionNo` (not numeric ID).
 """
+import asyncio
+
 from ..client import api
 
 
@@ -20,7 +22,12 @@ def register(mcp) -> None:
         limit: int = 20,
         page: int = 1,
     ) -> dict:
-        """List orders with optional filters.
+        """List orders with optional filters. Returns paginated results.
+
+        IMPORTANT for AI: Response includes 'meta' with total, total_page, current.
+        - Use filters (status, date range, shop_id) to narrow results.
+        - If needed results span multiple pages, call again with incremented 'page'.
+        - Use 'limit' up to 50 to reduce number of page calls.
 
         Args:
             status: Order status string (see sys/helpers for valid values)
@@ -35,7 +42,6 @@ def register(mcp) -> None:
         params: dict = {
             "limit": limit,
             "page": page,
-            "simple_paginate_meta": 1,
         }
         if status:
             params["status"] = status
@@ -93,3 +99,47 @@ def register(mcp) -> None:
         return await api(
             "POST", f"/open/api/orders/{transaction_no}/send-to-goship"
         )
+
+    @mcp.tool()
+    async def search_all_orders(
+        status: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        shop_id: str | None = None,
+    ) -> dict:
+        """Fetch ALL orders across all pages in parallel.
+
+        Use when you need a complete list, e.g. 'all orders from last week'
+        or 'how many orders are pending?'.
+        ALWAYS use filters (status, date range) to narrow results.
+        """
+        params: dict = {"limit": 50, "page": 1}
+        if status:
+            params["status"] = status
+        if from_date:
+            params["from_date"] = from_date
+        if to_date:
+            params["to_date"] = to_date
+        if shop_id:
+            params["shop_id"] = shop_id
+
+        first = await api("GET", "/open/api/orders", params=params)
+        meta = first.get("meta", {})
+        total_pages = meta.get("total_page", 1)
+        all_data = first.get("data", [])
+
+        if total_pages > 1:
+            tasks = [
+                api("GET", "/open/api/orders", params={**params, "page": p})
+                for p in range(2, total_pages + 1)
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, dict) and "data" in res:
+                    all_data.extend(res["data"])
+
+        return {
+            "total_found": meta.get("total", len(all_data)),
+            "pages_fetched": total_pages,
+            "data": all_data,
+        }

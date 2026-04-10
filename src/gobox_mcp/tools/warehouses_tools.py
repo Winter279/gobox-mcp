@@ -16,9 +16,15 @@ def register(mcp) -> None:
         from_date: str | None = None,
         to_date: str | None = None,
         limit: int = 20,
+        page: int = 1,
     ) -> dict:
-        """List inventory check (stock count) documents."""
-        params: dict = {"limit": limit, "simple_paginate_meta": 1}
+        """List inventory check (stock count) documents. Returns paginated results.
+
+        IMPORTANT for AI: Response includes 'meta' with total, total_page, current.
+        - Use filters to narrow results.
+        - If needed, call again with incremented 'page'.
+        """
+        params: dict = {"limit": limit, "page": page}
         if warehouse_id:
             params["warehouse_id"] = warehouse_id
         if from_date:
@@ -32,9 +38,15 @@ def register(mcp) -> None:
         warehouse_id: str | None = None,
         status: str | None = None,
         limit: int = 20,
+        page: int = 1,
     ) -> dict:
-        """List warehouse picking documents (import/export/transfer)."""
-        params: dict = {"limit": limit, "simple_paginate_meta": 1}
+        """List warehouse picking documents (import/export/transfer). Paginated.
+
+        IMPORTANT for AI: Response includes 'meta' with total, total_page, current.
+        - Use filters to narrow results.
+        - If needed, call again with incremented 'page'.
+        """
+        params: dict = {"limit": limit, "page": page}
         if warehouse_id:
             params["warehouse_id"] = warehouse_id
         if status:

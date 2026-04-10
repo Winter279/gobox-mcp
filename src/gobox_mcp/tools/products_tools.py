@@ -26,11 +26,16 @@ def register(mcp) -> None:
         limit: int = 20,
         page: int = 1,
     ) -> dict:
-        """List products with optional category/brand/keyword filters."""
+        """List products with optional filters. Returns paginated results.
+
+        IMPORTANT for AI: Response includes 'meta' with total, total_page, current.
+        - ALWAYS use 'keyword' to search first instead of browsing all pages.
+        - If needed results span multiple pages, call again with incremented 'page'.
+        - Use 'limit' up to 50 to reduce number of page calls.
+        """
         params: dict = {
             "limit": limit,
             "page": page,
-            "simple_paginate_meta": 1,
         }
         if category_id:
             params["category_id"] = category_id
@@ -39,6 +44,49 @@ def register(mcp) -> None:
         if keyword:
             params["keyword"] = keyword
         return await api("GET", "/open/api/products", params=params)
+
+    @mcp.tool()
+    async def search_all_products(
+        keyword: str | None = None,
+        category_id: str | None = None,
+        brand_id: str | None = None,
+    ) -> dict:
+        """Fetch ALL products across all pages in parallel.
+
+        Use this when you need a complete list, e.g. 'show all products of brand X'
+        or 'how many products match keyword Y?'. Returns combined data + total count.
+        ALWAYS use keyword/category/brand filters to narrow results when possible.
+        """
+        params: dict = {"limit": 50, "page": 1}
+        if keyword:
+            params["keyword"] = keyword
+        if category_id:
+            params["category_id"] = category_id
+        if brand_id:
+            params["brand_id"] = brand_id
+
+        # First call to get total_page count
+        first = await api("GET", "/open/api/products", params=params)
+        meta = first.get("meta", {})
+        total_pages = meta.get("total_page", 1)
+        all_data = first.get("data", [])
+
+        # Fetch all remaining pages in parallel
+        if total_pages > 1:
+            tasks = [
+                api("GET", "/open/api/products", params={**params, "page": p})
+                for p in range(2, total_pages + 1)
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, dict) and "data" in res:
+                    all_data.extend(res["data"])
+
+        return {
+            "total_found": meta.get("total", len(all_data)),
+            "pages_fetched": total_pages,
+            "data": all_data,
+        }
 
     @mcp.tool()
     async def get_product(sku: str) -> dict:
