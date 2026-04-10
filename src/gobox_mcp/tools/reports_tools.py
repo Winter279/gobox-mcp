@@ -30,12 +30,16 @@ def _report_params(
     warehouse_id: str | None = None,
     sku_sku: str | None = None,
     q: str | None = None,
+    include: str | None = None,
     limit: int = 100,
     page: int = 1,
     sort: str = "done_at:1",
     extra: dict | None = None,
 ) -> dict:
-    """Build common report param dict."""
+    """Build common report param dict.
+
+    Available include relations for reports: product_sku, warehouse
+    """
     params: dict = {"limit": limit, "page": page, "sort": sort}
     if start_date:
         params["start_date"] = start_date
@@ -47,6 +51,8 @@ def _report_params(
         params["sku_sku"] = sku_sku
     if q:
         params["q"] = q
+    if include:
+        params["include[]"] = include.split(",")
     if extra:
         params.update(extra)
     return params
@@ -63,20 +69,14 @@ def register(mcp) -> None:
         sku_sku: str | None = None,
         is_consignment: bool | None = None,
         is_manual: bool | None = None,
+        include: str = "product_sku,warehouse",
         limit: int = 100,
         page: int = 1,
     ) -> dict:
         """Warehouse import (stock-in) report.
 
         Args:
-            start_date: Start date (YYYY-MM-DD)
-            end_date: End date (YYYY-MM-DD)
-            warehouse_id: Filter by warehouse
-            sku_sku: Filter by SKU
-            is_consignment: Filter consignment imports only
-            is_manual: Filter manual imports only
-            limit: Page size (default 100)
-            page: Page number
+            include: Relations (default: product_sku,warehouse)
         """
         extra = {}
         if is_consignment is not None:
@@ -87,7 +87,8 @@ def register(mcp) -> None:
             "GET",
             "/open/api/reports/warehouse-import",
             params=_report_params(start_date, end_date, warehouse_id, sku_sku,
-                                  limit=limit, page=page, extra=extra or None),
+                                  include=include, limit=limit, page=page,
+                                  extra=extra or None),
         )
 
     @mcp.tool()
@@ -97,6 +98,7 @@ def register(mcp) -> None:
         warehouse_id: str | None = None,
         sku_sku: str | None = None,
         q: str | None = None,
+        include: str = "product_sku,warehouse",
         limit: int = 100,
         page: int = 1,
     ) -> dict:
@@ -104,12 +106,13 @@ def register(mcp) -> None:
 
         Args:
             q: Search by order or shipping code
+            include: Relations (default: product_sku,warehouse)
         """
         return await api(
             "GET",
             "/open/api/reports/warehouse-import-refund",
             params=_report_params(start_date, end_date, warehouse_id, sku_sku,
-                                  q=q, limit=limit, page=page),
+                                  q=q, include=include, limit=limit, page=page),
         )
 
     @mcp.tool()
@@ -118,6 +121,7 @@ def register(mcp) -> None:
         end_date: str | None = None,
         warehouse_id: str | None = None,
         q: str | None = None,
+        include: str = "product_sku,warehouse",
         limit: int = 100,
         page: int = 1,
     ) -> dict:
@@ -125,12 +129,13 @@ def register(mcp) -> None:
 
         Args:
             q: Search by order or shipping code
+            include: Relations (default: product_sku,warehouse)
         """
         return await api(
             "GET",
             "/open/api/reports/warehouse-export-by-order",
             params=_report_params(start_date, end_date, warehouse_id,
-                                  q=q, limit=limit, page=page),
+                                  q=q, include=include, limit=limit, page=page),
         )
 
     @mcp.tool()
@@ -139,15 +144,20 @@ def register(mcp) -> None:
         end_date: str | None = None,
         warehouse_id: str | None = None,
         sku_sku: str | None = None,
+        include: str = "product_sku,warehouse",
         limit: int = 100,
         page: int = 1,
     ) -> dict:
-        """Warehouse export report grouped by SKU."""
+        """Warehouse export report grouped by SKU.
+
+        Args:
+            include: Relations (default: product_sku,warehouse)
+        """
         return await api(
             "GET",
             "/open/api/reports/warehouse-export-by-sku",
             params=_report_params(start_date, end_date, warehouse_id, sku_sku,
-                                  limit=limit, page=page),
+                                  include=include, limit=limit, page=page),
         )
 
     @mcp.tool()
@@ -158,6 +168,7 @@ def register(mcp) -> None:
         sku_sku: str | None = None,
         barcode: str | None = None,
         user_id: int | None = None,
+        include: str = "product_sku,warehouse",
         limit: int = 100,
         page: int = 1,
     ) -> dict:
@@ -166,6 +177,7 @@ def register(mcp) -> None:
         Args:
             barcode: Filter by barcode
             user_id: Filter by user who performed the check
+            include: Relations (default: product_sku,warehouse)
         """
         extra = {}
         if barcode:
@@ -176,7 +188,8 @@ def register(mcp) -> None:
             "GET",
             "/open/api/reports/inventories",
             params=_report_params(start_date, end_date, warehouse_id, sku_sku,
-                                  limit=limit, page=page, extra=extra or None),
+                                  include=include, limit=limit, page=page,
+                                  extra=extra or None),
         )
 
     @mcp.tool()
@@ -185,15 +198,20 @@ def register(mcp) -> None:
         end_date: str | None = None,
         warehouse_id: str | None = None,
         sku_sku: str | None = None,
+        include: str = "product_sku,warehouse",
         limit: int = 100,
         page: int = 1,
     ) -> dict:
-        """Warehouse storage snapshot — what's currently stored."""
+        """Warehouse storage snapshot — what's currently stored.
+
+        Args:
+            include: Relations (default: product_sku,warehouse)
+        """
         return await api(
             "GET",
             "/open/api/reports/warehouse-store",
             params=_report_params(start_date, end_date, warehouse_id, sku_sku,
-                                  limit=limit, page=page),
+                                  include=include, limit=limit, page=page),
         )
 
     @mcp.tool()
@@ -202,8 +220,13 @@ def register(mcp) -> None:
         start_date: str | None = None,
         end_date: str | None = None,
         sku_sku: str | None = None,
+        include: str = "product_sku,warehouse",
     ) -> dict:
-        """Current stock balance per warehouse/SKU. warehouse_id is REQUIRED."""
+        """Current stock balance per warehouse/SKU. warehouse_id is REQUIRED.
+
+        Args:
+            include: Relations (default: product_sku,warehouse)
+        """
         params: dict = {"warehouse_id": warehouse_id}
         if start_date:
             params["start_date"] = start_date
@@ -211,6 +234,8 @@ def register(mcp) -> None:
             params["end_date"] = end_date
         if sku_sku:
             params["sku_sku"] = sku_sku
+        if include:
+            params["include[]"] = include.split(",")
         return await api(
             "GET", "/open/api/reports/warehouse-stock", params=params
         )
@@ -221,6 +246,7 @@ def register(mcp) -> None:
         end_date: str | None = None,
         warehouse_id: str | None = None,
         q: str | None = None,
+        include: str = "product_sku,warehouse",
         limit: int = 100,
         page: int = 1,
     ) -> dict:
@@ -228,10 +254,11 @@ def register(mcp) -> None:
 
         Args:
             q: Search by order, shipping, picking code, or GSKU
+            include: Relations (default: product_sku,warehouse)
         """
         return await api(
             "GET",
             "/open/api/reports/materials",
             params=_report_params(start_date, end_date, warehouse_id,
-                                  q=q, limit=limit, page=page),
+                                  q=q, include=include, limit=limit, page=page),
         )

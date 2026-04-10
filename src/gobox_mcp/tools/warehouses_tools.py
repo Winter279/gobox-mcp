@@ -56,6 +56,7 @@ def register(mcp) -> None:
         status: int | None = None,
         done_status: int | None = None,
         sku_sku: str | None = None,
+        include: str | None = None,
         start_create_date: str | None = None,
         end_create_date: str | None = None,
         start_done_date: str | None = None,
@@ -70,6 +71,7 @@ def register(mcp) -> None:
         - Status: 1=pending, 10=awaiting confirmation, 200=completed
         - Done status: 1=matched, 2=discrepancy, 3=excess, 4=shortage
         - Use date filters + warehouse_id to narrow results.
+        - Include: location,confirmer,creator,processer,sku
 
         Args:
             q: Search by inventory code
@@ -77,6 +79,7 @@ def register(mcp) -> None:
             status: 1=pending, 10=awaiting confirmation, 200=completed
             done_status: 1=matched, 2=discrepancy, 3=excess, 4=shortage
             sku_sku: Filter by SKU
+            include: Relations: location,confirmer,creator,processer,sku
             start_create_date: Creation date start (YYYY-MM-DD)
             end_create_date: Creation date end (YYYY-MM-DD)
             start_done_date: Completion date start (YYYY-MM-DD)
@@ -96,6 +99,8 @@ def register(mcp) -> None:
             params["done_status"] = done_status
         if sku_sku:
             params["sku_sku"] = sku_sku
+        if include:
+            params["include[]"] = include.split(",")
         if start_create_date:
             params["start_create_date"] = start_create_date
         if end_create_date:
@@ -114,6 +119,7 @@ def register(mcp) -> None:
         type: int | None = None,
         status: str | None = None,
         sku_sku: str | None = None,
+        include: str | None = None,
         start_create_date: str | None = None,
         end_create_date: str | None = None,
         start_done_date: str | None = None,
@@ -127,6 +133,7 @@ def register(mcp) -> None:
         IMPORTANT for AI:
         - Type: 1=shelf transfer, 2=import, 3=export, 4=warehouse transfer
         - Use 'q' to search by code, order number, or shipping code.
+        - Include: moves.sku,order,processer,doner,handoverer,handover,assigner,waiting_revoker,revoker
 
         Args:
             q: Search by code, order, shipping, picking code
@@ -135,6 +142,7 @@ def register(mcp) -> None:
             type: 1=shelf transfer, 2=import, 3=export, 4=warehouse transfer
             status: Status filter
             sku_sku: Filter by SKU
+            include: Relations: moves.sku,order,processer,doner,handoverer,handover,assigner,waiting_revoker,revoker
             start_create_date: Creation date start (YYYY-MM-DD)
             end_create_date: Creation date end (YYYY-MM-DD)
             start_done_date: Completion date start (YYYY-MM-DD)
@@ -156,6 +164,8 @@ def register(mcp) -> None:
             params["status"] = status
         if sku_sku:
             params["sku_sku"] = sku_sku
+        if include:
+            params["include[]"] = include.split(",")
         if start_create_date:
             params["start_create_date"] = start_create_date
         if end_create_date:
