@@ -1,17 +1,38 @@
-"""Product catalog + SKU quantity tools.
+"""Product catalog, SKU variants, and inventory quantity tools.
 
-Exposes Gobox's 5 distinct SKU inventory states:
-- available: sellable stock (not held/picked)
-- in_warehouse: physically present in warehouse
-- keep_pick: reserved for outgoing orders
-- wait_qc: awaiting quality check
-- wait_incoming: expected from consignments
+== WORKFLOW GUIDE FOR AI ==
 
-Composite tool `sku_full_status` aggregates all 5 in one AI-friendly call.
+1. FINDING PRODUCTS:
+   - Use `list_products(q="keyword")` to search by name/SKU
+   - Use `get_product(sku)` with include to get FULL detail (skus, variants, images, etc.)
+   - Use `search_all_products(q="keyword")` only when you need ALL matching results
+
+2. CHECKING STOCK:
+   - Use `sku_full_status(sku)` to get ALL 5 quantity states in one call
+   - Individual quantity tools only when you need just one specific state
+
+3. PRODUCT MANAGEMENT:
+   - Create: first call `list_categories` + `list_brands` to get valid IDs
+   - Update: call `get_product(sku)` first to see current state
+   - Delete: confirm with user before calling
+
+4. QUANTITY STATES EXPLAINED:
+   - available: sellable stock (not held/picked) — what can be sold NOW
+   - in_warehouse: physically present (includes held stock)
+   - keep_pick: reserved for outgoing order picks (not available for sale)
+   - wait_qc: awaiting quality check (from consignment, not yet sellable)
+   - wait_incoming: expected from incoming consignments (not yet in warehouse)
+
+5. INCLUDE RELATIONS (for list_products / get_product):
+   skus, variants, images, attributes, brand, shops, combos
+   — ALWAYS use include when you need full product info
 """
 import asyncio
 
 from ..client import api
+
+# Default include for full product detail
+_PRODUCT_INCLUDES = "skus,variants,images,attributes,brand,shops,combos"
 
 
 def register(mcp) -> None:
@@ -20,58 +41,134 @@ def register(mcp) -> None:
     # === Product catalog ===
     @mcp.tool()
     async def list_products(
+        q: str | None = None,
         category_id: str | None = None,
         brand_id: str | None = None,
-        keyword: str | None = None,
-        limit: int = 20,
+        shop_ids: list[str] | None = None,
+        platform: str | None = None,
+        product_sku: str | None = None,
+        sku_sku: str | None = None,
+        include: str | None = None,
+        sort: str = "id:-1",
+        limit: int = 25,
         page: int = 1,
     ) -> dict:
-        """List products with optional filters. Returns paginated results.
+        """List products with filters. Returns paginated results.
 
-        IMPORTANT for AI: Response includes 'meta' with total, total_page, current.
-        - ALWAYS use 'keyword' to search first instead of browsing all pages.
-        - If needed results span multiple pages, call again with incremented 'page'.
-        - Use 'limit' up to 50 to reduce number of page calls.
+        IMPORTANT for AI:
+        - ALWAYS use 'q' to search by name/SKU first instead of browsing all pages.
+        - Use 'include' to get relations: skus,variants,images,attributes,brand,shops,combos
+        - Response 'meta' has total, total_page, current for pagination.
+        - Platform codes: 1=shopee, 2=lazada, 3=tiktokshop, 4=tiki, 5=pancake, 6=pos
+
+        Args:
+            q: Search by product name or SKU
+            category_id: Filter by category ID
+            brand_id: Filter by brand ID
+            shop_ids: Filter by shop IDs (list)
+            platform: Filter by platform (1=shopee, 2=lazada, 3=tiktokshop, 4=tiki, 5=pancake, 6=pos)
+            product_sku: Search by product SKU specifically
+            sku_sku: Search by variant SKU specifically
+            include: Comma-separated relations: skus,variants,images,attributes,brand,shops,combos
+            sort: Sort order (default id:-1 = newest first)
+            limit: Page size (default 25)
+            page: Page number (1-indexed)
         """
-        params: dict = {
-            "limit": limit,
-            "page": page,
-        }
+        params: dict = {"limit": limit, "page": page, "sort": sort}
+        if q:
+            params["q"] = q
         if category_id:
             params["category_id"] = category_id
         if brand_id:
             params["brand_id"] = brand_id
-        if keyword:
-            params["keyword"] = keyword
+        if shop_ids:
+            params["shop_ids[]"] = shop_ids
+        if platform:
+            params["platform"] = platform
+        if product_sku:
+            params["product_sku"] = product_sku
+        if sku_sku:
+            params["sku_sku"] = sku_sku
+        if include:
+            params["include[]"] = include.split(",")
         return await api("GET", "/open/api/products", params=params)
 
     @mcp.tool()
+    async def get_product(sku: str, include: str | None = None) -> dict:
+        """Fetch FULL product detail by SKU with all relations.
+
+        Args:
+            sku: Product SKU
+            include: Comma-separated relations (default: skus,variants,images,attributes,brand,shops,combos)
+        """
+        inc = include or _PRODUCT_INCLUDES
+        return await api(
+            "GET",
+            f"/open/api/products/{sku}",
+            params={"include[]": inc.split(",")},
+        )
+
+    @mcp.tool()
+    async def create_product(data: dict) -> dict:
+        """Create a new product.
+
+        WORKFLOW: First call list_categories + list_brands to get valid IDs.
+
+        Required body fields:
+            category_id (int): Category ID (from list_categories)
+        Optional fields:
+            name (str), sku (str), description (str),
+            brand_id (int), weight (int, grams), length/width/height (int),
+            is_combo (bool), total_price (number, required if is_combo=1),
+            product_combos: [{sku_name, quantity}] (if combo),
+            variants: [{name, value}],
+            skus: [{sku, price, supplier_price, variants}],
+            images: [{image, variant_name, variant_value}],
+            attributes: [{attribute_id, value, platform, values[], unit}]
+        """
+        return await api("POST", "/open/api/products", json=data)
+
+    @mcp.tool()
+    async def update_product(sku: str, data: dict) -> dict:
+        """Update product by SKU.
+
+        WORKFLOW: Call get_product(sku) first to see current state before updating.
+        Body fields same as create_product.
+        """
+        return await api("POST", f"/open/api/products/{sku}", json=data)
+
+    @mcp.tool()
+    async def delete_product(sku: str) -> dict:
+        """Delete product by SKU. WARNING: This is irreversible."""
+        return await api("DELETE", f"/open/api/products/{sku}")
+
+    @mcp.tool()
     async def search_all_products(
-        keyword: str | None = None,
+        q: str | None = None,
         category_id: str | None = None,
         brand_id: str | None = None,
+        include: str | None = None,
     ) -> dict:
         """Fetch ALL products across all pages in parallel.
 
-        Use this when you need a complete list, e.g. 'show all products of brand X'
-        or 'how many products match keyword Y?'. Returns combined data + total count.
-        ALWAYS use keyword/category/brand filters to narrow results when possible.
+        Use when you need a complete list, e.g. 'show all products of brand X'.
+        ALWAYS use q/category/brand filters to narrow results when possible.
         """
-        params: dict = {"limit": 50, "page": 1}
-        if keyword:
-            params["keyword"] = keyword
+        params: dict = {"limit": 50, "page": 1, "sort": "id:-1"}
+        if q:
+            params["q"] = q
         if category_id:
             params["category_id"] = category_id
         if brand_id:
             params["brand_id"] = brand_id
+        if include:
+            params["include[]"] = include.split(",")
 
-        # First call to get total_page count
         first = await api("GET", "/open/api/products", params=params)
         meta = first.get("meta", {})
         total_pages = meta.get("total_page", 1)
         all_data = first.get("data", [])
 
-        # Fetch all remaining pages in parallel
         if total_pages > 1:
             tasks = [
                 api("GET", "/open/api/products", params={**params, "page": p})
@@ -89,85 +186,92 @@ def register(mcp) -> None:
         }
 
     @mcp.tool()
-    async def get_product(sku: str) -> dict:
-        """Fetch product detail by SKU."""
-        return await api("GET", f"/open/api/products/{sku}")
-
-    @mcp.tool()
     async def list_categories() -> dict:
-        """List all product categories."""
+        """List all product categories. Use to get category_id for product creation."""
         return await api("GET", "/open/api/categories")
 
     @mcp.tool()
     async def list_brands() -> dict:
-        """List all brands."""
+        """List all brands. Use to get brand_id for product creation/filtering."""
         return await api("GET", "/open/api/brands")
 
     @mcp.tool()
     async def list_attributes() -> dict:
-        """List product attributes (color, size, etc.)."""
+        """List product attributes (color, size, etc.). Use for product creation."""
         return await api("GET", "/open/api/attributes")
+
+    @mcp.tool()
+    async def list_product_skus(
+        q: str | None = None,
+        limit: int = 25,
+        page: int = 1,
+    ) -> dict:
+        """List all product SKU variants.
+
+        Args:
+            q: Search by SKU code
+            limit: Page size
+            page: Page number
+        """
+        params: dict = {"limit": limit, "page": page}
+        if q:
+            params["q"] = q
+        return await api("GET", "/open/api/product-skus", params=params)
 
     # === SKU quantity states ===
     async def _quantity(endpoint: str, sku: str | None) -> dict:
-        """Internal helper for quantity endpoints that accept optional sku filter."""
+        """Internal helper for quantity endpoints."""
         params = {"sku": sku} if sku else {}
         return await api("GET", endpoint, params=params)
 
     @mcp.tool()
     async def sku_quantity_available(sku: str | None = None) -> dict:
-        """Get AVAILABLE (sellable) quantity for SKU. Omit sku for all SKUs."""
+        """Get AVAILABLE (sellable) quantity. This is what can be sold NOW."""
         return await _quantity(
-            "/open/api/product-skus/quantity-available", sku
+            "/open/api/product-skus-quantity-available", sku
         )
 
     @mcp.tool()
     async def sku_quantity_in_warehouse(sku: str | None = None) -> dict:
         """Get total quantity physically IN warehouse (includes held stock)."""
         return await _quantity(
-            "/open/api/product-skus/quantity-in-warehouse", sku
+            "/open/api/product-skus-quantity-in-warehouse", sku
         )
 
     @mcp.tool()
     async def sku_quantity_keep_pick(sku: str | None = None) -> dict:
-        """Get quantity reserved for outgoing order picks (not available)."""
+        """Get quantity reserved for outgoing order picks (not available for sale)."""
         return await _quantity(
-            "/open/api/product-skus/quantity-keep-pick-in-warehouse", sku
+            "/open/api/product-skus-quantity-keep-pick-in-warehouse", sku
         )
 
     @mcp.tool()
     async def sku_quantity_wait_qc(sku: str | None = None) -> dict:
         """Get quantity waiting for QC inspection (not yet sellable)."""
         return await _quantity(
-            "/open/api/product-skus/quantity-wait-qc", sku
+            "/open/api/product-skus-quantity-wait-qc", sku
         )
 
     @mcp.tool()
     async def sku_quantity_wait_incoming(sku: str | None = None) -> dict:
-        """Get quantity expected from incoming consignments."""
+        """Get quantity expected from incoming consignments (not yet in warehouse)."""
         return await _quantity(
-            "/open/api/product-skus/quantity-wait-income-consigments", sku
+            "/open/api/product-skus-quantity-wait-income-consigments", sku
         )
 
     @mcp.tool()
     async def sku_full_status(sku: str) -> dict:
         """Composite: fetch ALL 5 quantity states for a single SKU in parallel.
 
-        Use this when answering 'How much of SKU X do we have?' — gives
-        AI the full picture in one call instead of 5 sequential tool calls.
+        PREFERRED tool for answering 'How much of SKU X do we have?'
+        Returns all states in one call instead of 5 sequential calls.
         """
         endpoints = [
-            ("available", "/open/api/product-skus/quantity-available"),
-            ("in_warehouse", "/open/api/product-skus/quantity-in-warehouse"),
-            (
-                "keep_pick",
-                "/open/api/product-skus/quantity-keep-pick-in-warehouse",
-            ),
-            ("wait_qc", "/open/api/product-skus/quantity-wait-qc"),
-            (
-                "wait_incoming",
-                "/open/api/product-skus/quantity-wait-income-consigments",
-            ),
+            ("available", "/open/api/product-skus-quantity-available"),
+            ("in_warehouse", "/open/api/product-skus-quantity-in-warehouse"),
+            ("keep_pick", "/open/api/product-skus-quantity-keep-pick-in-warehouse"),
+            ("wait_qc", "/open/api/product-skus-quantity-wait-qc"),
+            ("wait_incoming", "/open/api/product-skus-quantity-wait-income-consigments"),
         ]
         tasks = [api("GET", ep, params={"sku": sku}) for _, ep in endpoints]
         results = await asyncio.gather(*tasks, return_exceptions=True)
